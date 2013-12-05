@@ -1,0 +1,24 @@
+[state]
+Architecture = 409
+FinalSIT = 410
+Implementation = 411
+Initialization = 412
+Maintenance = 413
+SIT1 = 414
+SIT2 = 415
+SIT3 = 416
+FeasibilityStudy = 560
+Tooling = 704
+EVT = 705
+DVT = 706
+PVT = 707
+Multi-SKURoll-Out = 721
+
+# only for General
+Administration = 445
+Day-off = 447
+non-projectMeeting = 448
+Patent = 449
+SurveyandStudy = 450
+Training = 451
+Others = 832

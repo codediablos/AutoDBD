@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/python
 
-import os, sys, urllib, urllib2, cookielib, time, datetime
+import os, sys, urllib, urllib2, cookielib, time, datetime, random
 import optparse
 import ConfigParser
 import bs4 as BeautifulSoup
@@ -12,6 +12,8 @@ from daemon import Daemon
 # import re
 # pat = re.compile('Title:.*')
 # print pat.search(content).group()
+
+GENERAL_PROJECT = ['445', '447', '448', '449', '450', '451', '832']
 
 class DbdDaemon(Daemon):
     dbd_login_url = 'http://woodstock.acer.com.tw/dbd/'
@@ -26,6 +28,8 @@ class DbdDaemon(Daemon):
 
     HOME_DIR = os.environ['HOME']
     config_file = HOME_DIR + '/.AutoDBD.conf'
+    project_file = HOME_DIR + '/AutoDBD/project_list'
+    state_file = HOME_DIR + '/AutoDBD/state_list'
 
     MSG_USAGE = "AutoDBD [ --undbd]"
 
@@ -47,7 +51,7 @@ class DbdDaemon(Daemon):
         self.parser.add_option('-u', '--undbd', action='store_true', dest='undbd', help="Un-DBD",default=False)
         self.parser.add_option('-i', '--input', action='store_true', dest='input', help="Input name & password",default=False)
         self.parser.add_option('-t', '--time', action='store_true', dest='time', help="Auto time card",default=False)
-        self.parser.add_option('-g', '--debug', action='store_true', dest='time', help="for debug",default=False)
+        self.parser.add_option('-g', '--debug', action='store_true', dest='debug', help="for debug",default=False)
         self.options, self.args = self.parser.parse_args(argv)
 
     def get_config(self):
@@ -68,11 +72,25 @@ class DbdDaemon(Daemon):
 
     def run(self):
         while True:
-            # auto_time_card(config)
-            self.auto_dbd_system()
+            if self.get_config().get('core', 'dbd') == 'y':
+                self.auto_dbd_system()
+            if self.get_config().get('core', 'timecard') == 'y':
+                self.auto_time_card();
+
             time.sleep(self.check_interval)
 
     def auto_time_card(self):
+        today = datetime.datetime.today()
+        start = datetime.time(15, 0)
+        if today.weekday() == 4 and \
+                today.time().hour == start.hour and \
+                today.time().minute == start.minute or \
+                self.options.debug:
+
+            self.kimia_login()
+            self.fill_task()
+
+    def kimia_login(self):
         name_cfg = ''
         pwd_cfg = ''
 
@@ -85,48 +103,71 @@ class DbdDaemon(Daemon):
             name_cfg = self.get_config().get('core', 'name')
             pwd_cfg = self.get_config().get('core', 'pwd')
 
-    	#login
-        req = urllib2.Request('http://woodstock.acer.com.tw/kimai/core/kimai.php')
-        rsp = urllib2.urlopen(req)
-    	#html = rsp.read()
-	    #soup = BeautifulSoup.BeautifulSoup(html)
         values = dict(name=name_cfg, password=pwd_cfg)
-        # print values
         data = urllib.urlencode(values)
         req = urllib2.Request(self.kimai_login_url, data)
         rsp = urllib2.urlopen(req)
 
-        html = rsp.read()
+    def fill_task(self):
+        str_projects = self.get_config().get('core', 'random_project').split(',')
+        str_states = self.get_config().get('core', 'random_state').split(',')
+        durations = self.get_config().get('core', 'random_duration').split(',')
+        projects = []
+        states = []
 
-    	#write
-        # req = urllib2.Request(self.kimai_processor_url)
-        # rsp = urllib2.urlopen(req)
-        # html = rsp.read()
-        # soup = BeautifulSoup.BeautifulSoup(html)
+        project_conf = ConfigParser.SafeConfigParser()
+        project_conf.read(self.project_file)
+        state_conf = ConfigParser.SafeConfigParser()
+        state_conf.read(self.state_file)
+
+        for project in str_projects:
+            if project_conf.has_option('project', project):
+                projects.append(project_conf.get('project', project))
+
+        for state in str_states:
+            if state_conf.has_option('state', state):
+                states.append(state_conf.get('state', state))
 
         tasks = []
-        tasks.append(('621', '25'))
-        tasks.append(('621', '26'))
-        tasks.append(('621', '27'))
-        tasks.append(('621', '28'))
-        tasks.append(('621', '29'))
+        today = datetime.datetime.today()
+        for i in xrange(5):
+            add_day = today + datetime.timedelta(-i, 0)
+            tasks.append([add_day.strftime('%Y.%m.%d'),
+                          random.choice(durations),
+                          random.choice(projects),
+                          random.choice(states)])
 
         for task in tasks:
-            values = dict(axAction='add_edit_record', comment='', comment_type='0', edit_duration='9.5',
-		  edit_in_day='2013.11.' + task[1], edit_in_time='00:00:00', edit_out_day='2013.11' + task[1], edit_out_time='17:24:14',
-		  evt_ID='412', filter='', id='0', pct_ID=task[0], rate='', trackingnr='', zlocation='')
-            # print values
+            if task[3] in GENERAL_PROJECT:
+                task[2] = project_conf.get('project', 'General')
+
+            values = dict(axAction='add_edit_record',
+                          comment='',
+                          comment_type='0',
+                          edit_in_day=task[0],
+                          edit_in_time='00:00:00',
+                          edit_out_time='17:24:14',
+                          edit_out_day=task[0],
+                          edit_duration=task[1],
+                          pct_ID=task[2],
+                          evt_ID=task[3],
+                          filter='',
+                          id='0',
+                          rate='',
+                          trackingnr='',
+                          zlocation='')
+
             data = urllib.urlencode(values)
             req = urllib2.Request(self.kimai_processor_url, data)
             rsp = urllib2.urlopen(req)
 
-            html = rsp.read()
-            #print html
+        if self.options.debug:
+            print tasks
 
     def auto_dbd_system(self):
         self.set_days()
         self.set_time()
-        
+
         today = datetime.datetime.today()
         if today.weekday() in self.days and \
                 today.time().hour == self.time.hour and \
