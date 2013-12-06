@@ -80,11 +80,13 @@ class DbdDaemon(Daemon):
             time.sleep(self.check_interval)
 
     def auto_time_card(self):
+        day_time = self.get_config().get('core', 'start_time').split(':')
         today = datetime.datetime.today()
-        start = datetime.time(15, 0)
-        if today.weekday() == 4 and \
+        start = datetime.time(int(day_time[0]), int(day_time[1]))
+
+        if (today.weekday() == 4 and \
                 today.time().hour == start.hour and \
-                today.time().minute == start.minute or \
+                today.time().minute == start.minute) or \
                 self.options.debug:
 
             self.kimia_login()
