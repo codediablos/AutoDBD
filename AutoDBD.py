@@ -84,8 +84,7 @@ class DbdDaemon(Daemon):
         today = datetime.datetime.today()
         start = datetime.time(int(day_time[0]), int(day_time[1]))
 
-        if (today.weekday() == 4 and \
-                today.time().hour == start.hour and \
+        if (today.time().hour == start.hour and \
                 today.time().minute == start.minute) or \
                 self.options.debug:
 
@@ -110,12 +109,27 @@ class DbdDaemon(Daemon):
         req = urllib2.Request(self.kimai_login_url, data)
         rsp = urllib2.urlopen(req)
 
+    def is_holiday(self, holidays):
+        today = datetime.datetime.today()
+        for oneday in holidays:
+            date = oneday.split('.')
+            if len(date) == 2:
+                if int(date[0]) == today.month and int(date[1]) == today.day:
+                    return True
+
+        return False
+
     def fill_task(self):
         str_projects = self.get_config().get('core', 'random_project').split(',')
         str_states = self.get_config().get('core', 'random_state').split(',')
         durations = self.get_config().get('core', 'random_duration').split(',')
+        holiday_list = self.get_config().get('core', 'holiday_list').split(',')
         projects = []
         states = []
+
+        if self.is_holiday(holiday_list):
+            print 'Do nothing.'
+            return
 
         project_conf = ConfigParser.SafeConfigParser()
         project_conf.read(self.project_file)
@@ -132,12 +146,17 @@ class DbdDaemon(Daemon):
 
         tasks = []
         today = datetime.datetime.today()
-        for i in xrange(5):
-            add_day = today + datetime.timedelta(-i, 0)
-            tasks.append([add_day.strftime('%Y.%m.%d'),
-                          random.choice(durations),
-                          random.choice(projects),
-                          random.choice(states)])
+#        for i in xrange(5):
+#            add_day = today + datetime.timedelta(-i, 0)
+#            tasks.append([add_day.strftime('%Y.%m.%d'),
+#                          random.choice(durations),
+#                          random.choice(projects),
+#                          random.choice(states)])
+
+        tasks.append([today.strftime('%Y.%m.%d'),
+                        random.choice(durations),
+                        random.choice(projects),
+                        random.choice(states)])
 
         for task in tasks:
             if task[3] in GENERAL_PROJECT:
