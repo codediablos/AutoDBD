@@ -111,6 +111,9 @@ class DbdDaemon(Daemon):
 
     def is_holiday(self, holidays):
         today = datetime.datetime.today()
+        if today.weekday() == 5 or today.weekday() == 6:
+            return True
+
         for oneday in holidays:
             date = oneday.split('.')
             if len(date) == 2:
