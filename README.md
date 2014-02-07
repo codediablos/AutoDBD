@@ -17,6 +17,7 @@ $ cp ~/AutoDBD/.AutoDBD.conf ~/.AutoDBD.conf
 <pre><code>$ vi ~/.AutoDBD.conf  
 </code></pre>
 #### AutoTimeCard ####
+Set `timecard = y` to using auto-time card  
 Project state will get from   
 [https://docs.google.com/spreadsheet/ccc?key=0AkLncPMATEhwdGRjejdRcEhFazNTc0plZ3dpb0twTmc](https://docs.google.com/spreadsheet/ccc?key=0AkLncPMATEhwdGRjejdRcEhFazNTc0plZ3dpb0twTmc)  
 Your need to set `random_project` by this side  
@@ -25,6 +26,11 @@ Your need to set `random_project` by this side
 ###4. Start service  
 Your can add below line to your .bashrc  
 <pre><code>python AutoDBD/AutoDBD.py start  
+</code></pre>
+
+Using below command to test (fill today task immediately)
+
+<pre><code>python AutoDBD/AutoDBD.py -g -t  
 </code></pre>
 
 And there have some logs in ~/.AutoDBD.log
