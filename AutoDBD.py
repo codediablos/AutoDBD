@@ -6,6 +6,8 @@ import optparse
 import ConfigParser
 import bs4 as BeautifulSoup
 import getpass
+import gspread
+import logging
 from daemon import Daemon
 
 # print result
@@ -13,7 +15,7 @@ from daemon import Daemon
 # pat = re.compile('Title:.*')
 # print pat.search(content).group()
 
-GENERAL_PROJECT = ['445', '447', '448', '449', '450', '451', '832']
+GENERAL_STATE = ['445', '447', '448', '449', '450', '451', '832']
 
 class DbdDaemon(Daemon):
 	dbd_login_url = 'http://woodstock.acer.com.tw/dbd/'
@@ -30,9 +32,16 @@ class DbdDaemon(Daemon):
 	config_file = HOME_DIR + '/.AutoDBD.conf'
 	project_file = HOME_DIR + '/AutoDBD/project_list'
 	state_file = HOME_DIR + '/AutoDBD/state_list'
+	project_state_file = HOME_DIR + '/.project_state'
+	log_file = HOME_DIR + '/.AutoDBD.log'
+
+	project_state = {}
+
+	logger = logging.getLogger('AutoDBD')
 
 	MSG_USAGE = "AutoDBD [ --undbd]"
 
+	google_col_size = 3
 	retry_interval = 60
 	check_interval = 60
 	authtok = ''
@@ -53,6 +62,12 @@ class DbdDaemon(Daemon):
 		self.parser.add_option('-t', '--time', action='store_true', dest='time', help="Auto time card",default=False)
 		self.parser.add_option('-g', '--debug', action='store_true', dest='debug', help="for debug",default=False)
 		self.options, self.args = self.parser.parse_args(argv)
+
+		hdlr = logging.FileHandler(self.log_file)
+		formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+		hdlr.setFormatter(formatter)
+		self.logger.addHandler(hdlr)
+		self.logger.setLevel(logging.INFO)
 
 	def get_config(self):
 		config = ConfigParser.SafeConfigParser()
@@ -85,13 +100,15 @@ class DbdDaemon(Daemon):
 		start = datetime.time(int(day_time[0]), int(day_time[1]))
 
 		if (today.time().hour == start.hour and \
-			today.time().minute == start.minute) or \
-			self.options.debug:
+			today.time().minute == start.minute) or self.options.debug:
+			self.get_data_form_server()
+			self.get_data_form_local()
 
-			self.kimia_login()
-			self.fill_task()
+			if self.kimia_login():
+				self.fill_task()
 
 	def kimia_login(self):
+		self.logger.info('kimia_login')
 		name_cfg = ''
 		pwd_cfg = ''
 
@@ -108,6 +125,15 @@ class DbdDaemon(Daemon):
 		data = urllib.urlencode(values)
 		req = urllib2.Request(self.kimai_login_url, data)
 		rsp = urllib2.urlopen(req)
+		html = rsp.read()
+
+		if not html.find('Access denied!') == -1:
+			self.logger.error('kimia login fail')
+			return False
+		else:
+			self.logger.info('kimia login success')
+
+		return True
 
 	def is_holiday(self, holidays):
 		today = datetime.datetime.today()
@@ -123,16 +149,65 @@ class DbdDaemon(Daemon):
 
 		return False
 
+	def write_list(self, f, _list):
+		for id in _list:
+			f.write(id + ':')
+		f.seek(f.tell() - 1)
+		f.write('\n')
+
+	def get_data_form_server(self):
+		try:
+			gc = gspread.login('codediablos.guest@gmail.com', 'acer123456')
+			sh = gc.open_by_key('0AkLncPMATEhwdGRjejdRcEhFazNTc0plZ3dpb0twTmc')
+			worksheet = sh.worksheet("State")
+
+			id_list = worksheet.row_values(worksheet.find("ProjectID").row)[1:]
+			project_list = worksheet.row_values(worksheet.find("Project").row)[1:]
+			state_list = worksheet.row_values(worksheet.find("State").row)[1:]
+
+			f = open(self.project_state_file, 'w')
+			self.write_list(f, id_list)
+			self.write_list(f, project_list)
+			self.write_list(f, state_list)
+			f.close()
+
+		except Exception:
+			self.logger.error('Get google drive error!')
+
+	def get_data_form_local(self):
+		f = open(self.project_state_file, 'r')
+		lines = f.readlines()
+		f.close()
+
+		if len(lines) >= self.google_col_size:
+			ids = lines[0].replace('\n', '').split(':')
+			projects = lines[1].replace('\n', '').split(':')
+			states = lines[2].replace('\n', '').split(':')
+
+			if len(projects) == len(states) and len(states) == len(ids):
+				for i in xrange(len(projects)):
+					self.project_state[projects[i]] = (ids[i], states[i])
+			else:
+				self.logger.error('Local data format error!')
+		else:
+			self.logger.error('Get local data format error!')
+
+
+	def get_project_index_by_name(self, name):
+		for i in xrange(len(self.projects)):
+			self.projects
+
+
 	def fill_task(self):
 		str_projects = self.get_config().get('core', 'random_project').split(',')
-		str_states = self.get_config().get('core', 'random_state').split(',')
+#		str_states = self.get_config().get('core', 'random_state').split(',')
 		durations = self.get_config().get('core', 'random_duration').split(',')
 		holiday_list = self.get_config().get('core', 'holiday_list').split(',')
-		projects = []
-		states = []
+#		projects = []
+#		states = []
 
 		if self.is_holiday(holiday_list):
-			print 'Do nothing.'
+			self.logger.info('Today is in holiday list')
 			return
 
 		project_conf = ConfigParser.SafeConfigParser()
@@ -140,54 +215,56 @@ class DbdDaemon(Daemon):
 		state_conf = ConfigParser.SafeConfigParser()
 		state_conf.read(self.state_file)
 
-		for project in str_projects:
-			if project_conf.has_option('project', project):
-				projects.append(project_conf.get('project', project))
+#		for project in str_projects:
+#			if project_conf.has_option('project', project):
+#				projects.append(project_conf.get('project', project))
 
-		for state in str_states:
-			if state_conf.has_option('state', state):
-				states.append(state_conf.get('state', state))
+#		for state in str_states:
+#			if state_conf.has_option('state', state):
+#				states.append(state_conf.get('state', state))
 
-		tasks = []
 		today = datetime.datetime.today()
-#		 for i in xrange(5):
-#			 add_day = today + datetime.timedelta(-i, 0)
-#			 tasks.append([add_day.strftime('%Y.%m.%d'),
-#						   random.choice(durations),
-#						   random.choice(projects),
-#						   random.choice(states)])
 
-		tasks.append([today.strftime('%Y.%m.%d'),
-						random.choice(durations),
-						random.choice(projects),
-						random.choice(states)])
+		project_name = random.choice(str_projects)
 
-		for task in tasks:
-			if task[3] in GENERAL_PROJECT:
-				task[2] = project_conf.get('project', 'General')
+		# default using General-SurveyandStudy to filled
+		project_index = project_conf.get('project', 'General')
+		state_index = state_conf.get('state', 'SurveyandStudy')
 
-			values = dict(axAction='add_edit_record',
-							comment='',
-							comment_type='0',
-							edit_in_day=task[0],
-							edit_in_time='00:00:00',
-							edit_out_time='17:24:14',
-							edit_out_day=task[0],
-							edit_duration=task[1],
-							pct_ID=task[2],
-							evt_ID=task[3],
-							filter='',
-							id='0',
-							rate='',
-							trackingnr='',
-							zlocation='')
+		if project_name in self.project_state:
+			project_index, state_name = self.project_state[project_name]
+			if state_conf.has_option('state', state_name):
+				state_index = state_conf.get('state', state_name)
+			else:
+				state_index = state_conf.get('state', 'Maintenance')
 
-			data = urllib.urlencode(values)
-			req = urllib2.Request(self.kimai_processor_url, data)
-			rsp = urllib2.urlopen(req)
+#		if state_index in GENERAL_STATE:
+#			project_index = project_conf.get('project', 'General')
+
+		values = dict(axAction='add_edit_record',
+						comment='',
+						comment_type='0',
+						edit_in_day=today.strftime('%Y.%m.%d'),
+						edit_in_time='00:00:00',
+						edit_out_time='17:24:14',
+						edit_out_day=today.strftime('%Y.%m.%d'),
+						edit_duration=random.choice(durations),
+						pct_ID=project_index,
+						evt_ID=state_index,
+						filter='',
+						id='0',
+						rate='',
+						trackingnr='',
+						zlocation='')
+
+		data = urllib.urlencode(values)
+		req = urllib2.Request(self.kimai_processor_url, data)
+		rsp = urllib2.urlopen(req)
+
+		self.logger.info('Fill task done! - ' + str([project_index, state_index]))
 
 		if self.options.debug:
-			print tasks
+			print (project_index, state_index)
 
 	def auto_dbd_system(self):
 		self.set_days()
@@ -216,15 +293,15 @@ class DbdDaemon(Daemon):
 		self.authtok = soup.find('input', attrs={'name':'authenticity_token'})['value']
 
 		# already login
-		if html.find("alert_food") != -1:
+		if not html.find("alert_food") == -1:
 			return
 
-		print 'login.................'
+		self.logger.info('login.................')
 		empid_cfg = self.get_config().get('core', 'empid')
 		pwd_cfg = self.get_config().get('core', 'pwd')
 
 		values = dict(authenticity_token=self.authtok, empid=empid_cfg, pwd=pwd_cfg)
-		print values
+		self.logger.info(values)
 		data = urllib.urlencode(values)
 		req = urllib2.Request(self.dbd_login_url, data)
 		rsp = urllib2.urlopen(req)
@@ -239,13 +316,13 @@ class DbdDaemon(Daemon):
 		rsp = urllib2.urlopen(req)
 		html = rsp.read()
 
-		if html.find("alert_cancel") != -1:
+		if not html.find("alert_cancel") == -1:
 			return True
 
 		return False
 
 	def dbd(self):
-		print 'dbd...................'
+		self.logger.info('dbd...................')
 
 		location_cfg = self.get_config().get('core', 'location')
 		food_cfg = self.get_config().get('core', 'food')
@@ -274,7 +351,7 @@ class DbdDaemon(Daemon):
 	def undbd(self):
 		self.login()
 
-		print 'undbd.................'
+		self.logger.info('undbd.................')
 
 		req = urllib2.Request(self.dbd_check_url)
 		rsp = urllib2.urlopen(req)
@@ -285,7 +362,7 @@ class DbdDaemon(Daemon):
 		# authtok = soup.find('input', attrs={'name':'authenticity_token'})['value']
 		order = soup.find('input', attrs={'name':'order_id'})
 		if order == None:
-			print 'Un-DBD Failed'
+			self.logger.error('Un-DBD Failed')
 			return
 
 		values = dict(authenticity_token=self.authtok, cancel_item=u'我要取消', order_id=order['value'])
