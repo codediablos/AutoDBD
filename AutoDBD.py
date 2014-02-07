@@ -61,6 +61,7 @@ class DbdDaemon(Daemon):
 		self.parser.add_option('-i', '--input', action='store_true', dest='input', help="Input name & password",default=False)
 		self.parser.add_option('-t', '--time', action='store_true', dest='time', help="Auto time card",default=False)
 		self.parser.add_option('-g', '--debug', action='store_true', dest='debug', help="for debug",default=False)
+		self.parser.add_option('--nodaemon', action='store_true', dest='nodaemon', help="Start with no-daemon",default=False)
 		self.options, self.args = self.parser.parse_args(argv)
 
 		hdlr = logging.FileHandler(self.log_file)
@@ -378,7 +379,7 @@ if __name__ == "__main__":
 		daemon.undbd()
 	elif daemon.options.time:
 		daemon.auto_time_card()
-	elif daemon.options.debug:
+	elif daemon.options.nodaemon:
 		daemon.run()
 	else:
 		if len(sys.argv) == 2:
