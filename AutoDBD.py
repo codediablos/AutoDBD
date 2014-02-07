@@ -61,6 +61,8 @@ class DbdDaemon(Daemon):
 		self.parser.add_option('-i', '--input', action='store_true', dest='input', help="Input name & password",default=False)
 		self.parser.add_option('-t', '--time', action='store_true', dest='time', help="Auto time card",default=False)
 		self.parser.add_option('-g', '--debug', action='store_true', dest='debug', help="for debug",default=False)
+		self.parser.add_option('--sync', action='store_true', dest='sync', help="Sync data with server",default=False)
+		self.parser.add_option('--local', action='store_true', dest='local', help="Not sync with server",default=False)
 		self.parser.add_option('--nodaemon', action='store_true', dest='nodaemon', help="Start with no-daemon",default=False)
 		self.options, self.args = self.parser.parse_args(argv)
 
@@ -102,7 +104,8 @@ class DbdDaemon(Daemon):
 
 		if (today.time().hour == start.hour and \
 			today.time().minute == start.minute) or self.options.debug:
-			self.get_data_form_server()
+			if not self.options.local:
+				self.get_data_form_server()
 			self.get_data_form_local()
 
 			if self.kimia_login():
@@ -135,6 +138,7 @@ class DbdDaemon(Daemon):
 			self.logger.info('kimia login success')
 
 		return True
+
 
 	def is_holiday(self, holidays):
 		today = datetime.datetime.today()
@@ -181,9 +185,9 @@ class DbdDaemon(Daemon):
 		f.close()
 
 		if len(lines) >= self.google_col_size:
-			ids = lines[0].replace('\n', '').split(':')
-			projects = lines[1].replace('\n', '').split(':')
-			states = lines[2].replace('\n', '').split(':')
+			ids = lines[0].replace('\n', '').replace(' ', '').split(':')
+			projects = lines[1].replace('\n', '').replace(' ', '').split(':')
+			states = lines[2].replace('\n', '').replace(' ', '').split(':')
 
 			if len(projects) == len(states) and len(states) == len(ids):
 				for i in xrange(len(projects)):
@@ -193,11 +197,9 @@ class DbdDaemon(Daemon):
 		else:
 			self.logger.error('Get local data format error!')
 
-
 	def get_project_index_by_name(self, name):
 		for i in xrange(len(self.projects)):
 			self.projects
-
 
 	def fill_task(self):
 		str_projects = self.get_config().get('core', 'random_project').split(',')
@@ -238,9 +240,11 @@ class DbdDaemon(Daemon):
 				state_index = state_conf.get('state', state_name)
 			else:
 				state_index = state_conf.get('state', 'Maintenance')
-
-#		if state_index in GENERAL_STATE:
-#			project_index = project_conf.get('project', 'General')
+		else:
+#			if state_index in GENERAL_STATE:
+			project_index = project_conf.get('project', 'General')
+			# For general task, using project_name replace state_name
+			state_index = state_conf.get('state', project_name)
 
 		values = dict(axAction='add_edit_record',
 						comment='',
@@ -284,7 +288,6 @@ class DbdDaemon(Daemon):
 			print self.is_done()
 		else:
 			print 'Not DBD'
-
 
 	def login(self):
 		req = urllib2.Request(self.dbd_login_url)
@@ -381,18 +384,17 @@ if __name__ == "__main__":
 		daemon.auto_time_card()
 	elif daemon.options.nodaemon:
 		daemon.run()
+	elif daemon.options.sync:
+		daemon.get_data_form_server()
 	else:
-		if len(sys.argv) == 2:
-			if 'start' == sys.argv[1]:
-				daemon.start()
-			elif 'stop' == sys.argv[1]:
-				daemon.stop()
-			elif 'restart' == sys.argv[1]:
-				daemon.restart()
-			else:
-				print "Unknown command"
-				sys.exit(2)
-			sys.exit(0)
+		if 'start' in daemon.args:
+			daemon.start()
+		elif 'stop' in daemon.args:
+			daemon.stop()
+		elif 'restart' in daemon.args:
+			daemon.restart()
 		else:
 			print "usage: %s start|stop|restart" % sys.argv[0]
 			sys.exit(2)
+
+		sys.exit(0)

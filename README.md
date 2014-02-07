@@ -30,6 +30,11 @@ Set `timecard = y` to use auto-time card
 Project state will get from   
 [https://docs.google.com/spreadsheet/ccc?key=0AkLncPMATEhwdGRjejdRcEhFazNTc0plZ3dpb0twTmc](https://docs.google.com/spreadsheet/ccc?key=0AkLncPMATEhwdGRjejdRcEhFazNTc0plZ3dpb0twTmc)  
 Your need to set `random_project` by this side  
+If you want to fill General task, using general state name replace project. ex. `random_project = SurveyandStudy`  
+
+It is also can mantain table by yourself, edit ~/.project_state  
+<pre><code>python AutoDBD/AutoDBD.py 
+</code></pre>
 
 
 ###4. Start service  
