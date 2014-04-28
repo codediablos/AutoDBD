@@ -110,6 +110,7 @@ class DbdDaemon(Daemon):
 
 			if self.kimia_login():
 				self.fill_task()
+				self.send_mail()
 
 	def kimia_login(self):
 		self.logger.info('kimia_login')
@@ -139,6 +140,10 @@ class DbdDaemon(Daemon):
 
 		return True
 
+	def send_mail(self):
+		if self.get_config().has_option('core', 'mail_list'):
+			mail_list = self.get_config().get('core', 'mail_list')
+			os.system("sendmail " + mail_list + " < " + self.log_file)
 
 	def is_holiday(self, holidays):
 		today = datetime.datetime.today()
