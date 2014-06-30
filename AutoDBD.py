@@ -35,6 +35,8 @@ class DbdDaemon(Daemon):
 	project_state_file = HOME_DIR + '/.project_state'
 	log_file = HOME_DIR + '/.AutoDBD.log'
 
+	temp_send_file = '/tmp/sendmail.txt'
+
 	project_state = {}
 
 	logger = logging.getLogger('AutoDBD')
@@ -143,7 +145,8 @@ class DbdDaemon(Daemon):
 	def send_mail(self):
 		if self.get_config().has_option('core', 'mail_list'):
 			mail_list = self.get_config().get('core', 'mail_list')
-			os.system("sendmail " + mail_list + " < " + self.log_file)
+			os.system("tac " + self.log_file + " > " + self.temp_send_file)
+			os.system("sendmail " + mail_list + " < " + self.temp_send_file)
 
 	def is_holiday(self, holidays):
 		today = datetime.datetime.today()

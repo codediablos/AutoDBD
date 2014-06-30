@@ -3,6 +3,7 @@ AutoDBD
 ###1. Install some package:
 
 <pre><code>sudo apt-get install python-pip  
+sudo apt-get install sendmail  
 sudo pip install BeautifulSoup4  
 sudo pip install gspread  
 </code></pre>
