@@ -59,6 +59,7 @@ class DbdDaemon(Daemon):
 		urllib2.install_opener(opener)
 
 		self.parser = optparse.OptionParser(self.MSG_USAGE)
+		self.parser.add_option('-d', '--dbd', action='store_true', dest='dbd', help="DBD",default=False)
 		self.parser.add_option('-u', '--undbd', action='store_true', dest='undbd', help="Un-DBD",default=False)
 		self.parser.add_option('-i', '--input', action='store_true', dest='input', help="Input name & password",default=False)
 		self.parser.add_option('-t', '--time', action='store_true', dest='time', help="Auto time card",default=False)
@@ -286,7 +287,7 @@ class DbdDaemon(Daemon):
 		today = datetime.datetime.today()
 		if today.weekday() in self.days and \
 			today.time().hour == self.time.hour and \
-			today.time().minute == self.time.minute:
+			today.time().minute == self.time.minute or self.options.debug:
 			self.login()
 
 			while not self.is_done():
@@ -386,7 +387,9 @@ class DbdDaemon(Daemon):
 
 if __name__ == "__main__":
 	daemon = DbdDaemon('/tmp/audo_dbd_daemon.pid', sys.argv)
-	if daemon.options.undbd:
+	if daemon.options.dbd:
+		daemon.auto_dbd_system();
+	elif daemon.options.undbd:
 		daemon.undbd()
 	elif daemon.options.time:
 		daemon.auto_time_card()
