@@ -112,8 +112,11 @@ class DbdDaemon(Daemon):
             self.get_data_form_local()
 
             if self.kimai_login():
-                self.fill_task()
-                self.send_mail()
+                try:
+                    self.fill_task()
+                    self.send_mail()
+                except:
+                    self.logger.info(sys.exc_info()[0])
 
     def kimai_login(self):
         self.logger.info('kimai_login')
